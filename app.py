@@ -27,7 +27,7 @@ st.image("assets/manus.jpg", width=400)
 st.sidebar.title("Navigation")
 page = st.sidebar.radio(
     "Select a page:",
-    ["Home", "SFT Training", "GRPO Training", "Dataset Viewer"]
+    ["Home", "SFT Training", "GRPO Training", "Dataset Viewer", "Chat with AI"]
 )
 
 # Home page
@@ -171,6 +171,104 @@ elif page == "Dataset Viewer":
     
     # Placeholder for dataset viewing functionality
     st.warning("Dataset viewing functionality will be implemented in a future update.")
+
+# Chat with AI page
+elif page == "Chat with AI":
+    st.header("Chat with OpenManus AI")
+    
+    st.markdown("""
+    Interact with the OpenManus AI model through this chat interface.
+    Ask questions about reinforcement learning, LLM agent tuning, or any other topic.
+    """)
+    
+    # Initialize model in session state if it doesn't exist
+    if "openmanus_model" not in st.session_state:
+        try:
+            # Check if accelerate is installed, if not, show installation instructions
+            try:
+                import accelerate
+            except ImportError:
+                st.error("Error: Accelerate package is required. Please install it using: pip install 'accelerate>=0.26.0'")
+                st.info("After installing, please restart the application.")
+                st.session_state.openmanus_model = None
+                # Skip the rest of the model loading code
+                
+            from openmanus_rl.model import OpenManusAI
+            with st.spinner("Loading OpenManus AI model..."):
+                st.session_state.openmanus_model = OpenManusAI()
+                st.success("Model loaded successfully!")
+        except Exception as e:
+            st.error(f"Error loading model: {str(e)}")
+            st.session_state.openmanus_model = None
+    
+    # Initialize chat history in session state if it doesn't exist
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    
+    # Display chat messages
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    user_input = st.chat_input("Type your message here...")
+    
+    if user_input:
+        # Add user message to chat history
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        
+        # Display user message
+        with st.chat_message("user"):
+            st.write(user_input)
+        
+        # Display assistant response using the OpenManus AI model
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                if st.session_state.openmanus_model is not None:
+                    try:
+                        # Convert chat history to format expected by the model
+                        messages = [{"role": msg["role"], "content": msg["content"]} 
+                                   for msg in st.session_state.chat_history]
+                        # Generate response using the model
+                        response = st.session_state.openmanus_model.chat(messages)
+                    except Exception as e:
+                        response = f"I'm sorry, I encountered an error: {str(e)}"
+                else:
+                    response = "I'm sorry, the OpenManus AI model is not available. Please check the error message above."
+                st.write(response)
+        
+        # Add assistant response to chat history
+        st.session_state.chat_history.append({"role": "assistant", "content": response})
+    
+    # Model settings
+    with st.expander("Model Settings"):
+        col1, col2 = st.columns(2)
+        with col1:
+            model_path = st.text_input("Model Path", "Qwen/Qwen2.5-1.5B-Instruct")
+            temperature = st.slider("Temperature", 0.0, 1.0, 0.7, 0.1)
+        with col2:
+            max_tokens = st.number_input("Max Tokens", 64, 4096, 1024)
+            top_p = st.slider("Top P", 0.0, 1.0, 0.9, 0.1)
+        
+        if st.button("Reload Model"):
+            try:
+                from openmanus_rl.model import OpenManusAI
+                with st.spinner("Loading OpenManus AI model with new settings..."):
+                    st.session_state.openmanus_model = OpenManusAI(
+                        model_path=model_path,
+                        max_new_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=top_p
+                    )
+                    st.success("Model reloaded successfully!")
+            except Exception as e:
+                st.error(f"Error loading model: {str(e)}")
+                st.session_state.openmanus_model = None
+    
+    # Option to clear chat history
+    if st.button("Clear Chat History"):
+        st.session_state.chat_history = []
+        st.experimental_rerun()
 
 # Footer
 st.markdown("---")
