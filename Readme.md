@@ -172,9 +172,9 @@ In summary, our method systematically integrates advanced reasoning paradigms, d
 
 | Source | Trajectories | Avg Turns | Key Features |
 |--------|--------------|-----------|--------------|
-| [AgentInstruct](https://huggingface.co/datasets/THUDM/AgentInstruct) | 1,866 | 5.24 | Multi-task QA |
-| [Agent-FLAN](https://huggingface.co/datasets/internlm/Agent-FLAN) | 3,000+ | 3-35 | Error recovery patterns |
-| **Combined** | 4,866+ | 4-20 | Enhanced generalization |
+| [AgentInstruct](https://huggingface.co/datasets/THUDM/AgentInstruct) | 1,866 | 5.24 | 	Multi-task QA, CoT reasoning |
+| [Agent-FLAN](https://huggingface.co/datasets/internlm/Agent-FLAN) | 34,442 | 3-35 | Error recovery patterns, diverse real-world tasks |
+| **Combined** | 36,308 | 4-20 | Enhanced generalization, broader task coverage |
 
 ### Supported Tasks
 - **text-generation**: ReAct-style instruction following
