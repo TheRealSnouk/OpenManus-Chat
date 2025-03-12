@@ -1,9 +1,9 @@
-# OpenManus-RL
-🤗 <a href="https://huggingface.co/datasets/CharlieDreemur/OpenManus-RL" target="_blank">Dataset (OpenManus-RL)</a>
+# OpenManus-RL: Local LLM Agent Tuning Platform
+🤗 <a href="https://huggingface.co/datasets/CharlieDreemur/OpenManus-RL" target="_blank">Dataset (OpenManus-RL)</a> | 💬 <a href="#chat-with-ai">Chat Interface</a> | 🧠 <a href="#local-llm-capabilities">Local LLM Support</a>
 </p>
-OpenManus-RL is an open-source initiative collaboratively led by **Ulab-UIUC** and **MetaGPT**.
+OpenManus-RL is an open-source initiative collaboratively led by **Ulab-UIUC** and **MetaGPT**, designed for local LLM agent tuning and reinforcement learning experimentation.
 
-This project is an extended version of the original [@OpenManus](https://github.com/mannaandpoem/OpenManus) initiative. Inspired by successful RL tunning for reasoning LLM such as Deepseek-R1, QwQ-32B, we will explore new paradigms for RL-based LLM agent tuning, particularly building upon foundations.
+This project is an extended version of the original [@OpenManus](https://github.com/mannaandpoem/OpenManus) initiative. Inspired by successful RL tuning for reasoning LLMs such as Deepseek-R1 and QwQ-32B, we explore new paradigms for RL-based LLM agent tuning with a focus on local model deployment and experimentation.
 
 We are committed to regularly updating our exploration directions and results in a dynamic, live-streaming fashion. All progress, including rigorous testing on agent benchmarks such as GAIA, AgentBench, WebShop, and OSWorld, and tuned models, will be openly shared and continuously updated.
 
@@ -91,6 +91,19 @@ Evaluate our framework on agentic benchmark such as Webshop, GAIA, OSWorld, Agen
     <img src="assets/openmanus-roadmap.png" style="width: 100%;" alt="marble">
   </div>
 </div>
+
+# Local LLM Capabilities
+
+OpenManus-RL features robust support for running LLMs locally on your hardware:
+
+- **Multiple Model Support**: Run various Hugging Face models locally, from smaller models like Qwen2.5-1.5B to larger ones based on your hardware capabilities
+- **Flexible Device Selection**: Automatically detects and utilizes available CUDA devices or falls back to CPU
+- **Optimized Inference**: Uses bfloat16 precision and other optimizations for efficient local inference
+- **Streaming Generation**: Real-time token streaming for responsive chat experience
+- **Custom System Prompts**: Configure system prompts for different use cases including developer mode
+- **Multi-Model Management**: Load and switch between multiple models during a session
+
+The platform also supports API-based models like Grok when local computation isn't feasible, providing a hybrid approach to model deployment.
 
 ## Method
 

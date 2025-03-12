@@ -16,46 +16,26 @@
 OpenManus AI Model Inference Module
 
 This module provides functionality for loading and running inference with OpenManus AI models.
+Supports multiple model types including Hugging Face models, Grok, and other API-based models.
 """
 
 import os
 import logging
-from typing import List, Dict, Any, Optional, Union
-
 import torch
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    PreTrainedModel,
-    PreTrainedTokenizer,
-    GenerationConfig
-)
+from typing import List, Dict, Any, Optional, Union, Generator
 
-# Define DEFAULT_CHAT_TEMPLATE here since we don't have utils.py yet
-DEFAULT_CHAT_TEMPLATE = """
-{% for message in messages %}
-{% if message['role'] == 'system' %}
-<|system|>
-{{ message['content'] }}
-{% elif message['role'] == 'user' %}
-<|user|>
-{{ message['content'] }}
-{% elif message['role'] == 'assistant' %}
-<|assistant|>
-{{ message['content'] }}
-{% endif %}
-{% endfor %}
-{% if add_generation_prompt %}
-<|assistant|>
-{% endif %}
-"""
+from .model_manager import (
+    ModelManager,
+    HuggingFaceModelInterface,
+    GrokModelInterface,
+    DEFAULT_SYSTEM_PROMPTS
+)
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL_PATH = "Qwen/Qwen2.5-1.5B-Instruct"
-DEFAULT_SYSTEM_PROMPT = """You are OpenManus AI, an assistant specialized in reinforcement learning for LLM agent tuning.
-You can answer questions about reinforcement learning, LLM agent tuning, and related topics.
-Provide detailed and accurate information based on your training."""
+DEFAULT_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPTS["default"]
+DEVELOPER_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPTS["developer"]
 
 
 class OpenManusAI:
@@ -69,6 +49,9 @@ class OpenManusAI:
         max_new_tokens: int = 1024,
         temperature: float = 0.7,
         top_p: float = 0.9,
+        model_type: str = "huggingface",
+        api_key: str = None,
+        developer_mode: bool = False
     ):
         """
         Initialize the OpenManus AI model.
@@ -80,124 +63,137 @@ class OpenManusAI:
             max_new_tokens: Maximum number of tokens to generate
             temperature: Temperature for sampling
             top_p: Top-p for nucleus sampling
+            model_type: Type of model to use ("huggingface" or "grok")
+            api_key: API key for API-based models like Grok
+            developer_mode: Whether to use developer mode system prompt
         """
         self.model_path = model_path
-        self.system_prompt = system_prompt
+        self.model_type = model_type.lower()
+        self.system_prompt = DEVELOPER_SYSTEM_PROMPT if developer_mode else system_prompt
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.top_p = top_p
+        self.device = device if device else ("cuda" if torch.cuda.is_available() else "cpu")
+        self.api_key = api_key
+        self.developer_mode = developer_mode
         
-        # Determine device
-        if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            self.device = device
-            
-        logger.info(f"Loading model from {model_path} on {self.device}")
+        # Initialize model manager
+        self.model_manager = ModelManager()
         
+        # Load the appropriate model based on model_type
         try:
-            # Load tokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model_path,
-                trust_remote_code=True
-            )
+            if self.model_type == "huggingface":
+                logger.info(f"Loading HuggingFace model from {model_path} on {self.device}")
+                model = HuggingFaceModelInterface(
+                    model_path=model_path,
+                    device=self.device,
+                    system_prompt=self.system_prompt,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_p=top_p
+                )
+                self.model_manager.add_model("default", model)
+            elif self.model_type == "grok":
+                logger.info("Initializing Grok model interface")
+                model = GrokModelInterface(
+                    api_key=api_key,
+                    system_prompt=self.system_prompt,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_p=top_p
+                )
+                self.model_manager.add_model("default", model)
+            else:
+                raise ValueError(f"Unsupported model type: {model_type}")
             
-            # Set chat template if not already set
-            if self.tokenizer.chat_template is None:
-                self.tokenizer.chat_template = DEFAULT_CHAT_TEMPLATE
-            
-            # Load model
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                torch_dtype=torch.bfloat16,
-                device_map=self.device,
-                trust_remote_code=True
-            )
-            
-            # Set generation config
-            self.generation_config = GenerationConfig(
-                max_new_tokens=self.max_new_tokens,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                do_sample=True,
-                pad_token_id=self.tokenizer.eos_token_id
-            )
-            
-            logger.info(f"Successfully loaded model and tokenizer")
+            logger.info(f"Successfully initialized {model_type} model")
         except Exception as e:
-            logger.error(f"Error loading model: {e}")
+            logger.error(f"Error initializing model: {e}")
             raise
     
-    def generate_response(self, user_message: str) -> str:
+    def add_model(self, model_id: str, model_type: str, model_path: str = None, 
+                 api_key: str = None, system_prompt: str = None) -> None:
+        """
+        Add a new model to the model manager.
+        
+        Args:
+            model_id: Unique identifier for the model
+            model_type: Type of model ("huggingface" or "grok")
+            model_path: Path to the model or model name (for HuggingFace models)
+            api_key: API key (for API-based models like Grok)
+            system_prompt: System prompt to use for the model
+        """
+        try:
+            if model_type.lower() == "huggingface":
+                if not model_path:
+                    raise ValueError("model_path is required for HuggingFace models")
+                
+                model = HuggingFaceModelInterface(
+                    model_path=model_path,
+                    device=self.device,
+                    system_prompt=system_prompt or self.system_prompt,
+                    max_new_tokens=self.max_new_tokens,
+                    temperature=self.temperature,
+                    top_p=self.top_p
+                )
+            elif model_type.lower() == "grok":
+                model = GrokModelInterface(
+                    api_key=api_key or self.api_key,
+                    system_prompt=system_prompt or self.system_prompt,
+                    max_new_tokens=self.max_new_tokens,
+                    temperature=self.temperature,
+                    top_p=self.top_p
+                )
+            else:
+                raise ValueError(f"Unsupported model type: {model_type}")
+            
+            self.model_manager.add_model(model_id, model)
+            logger.info(f"Added {model_type} model with ID: {model_id}")
+        except Exception as e:
+            logger.error(f"Error adding model: {e}")
+            raise
+    
+    def set_current_model(self, model_id: str) -> None:
+        """
+        Set the current model to use for inference.
+        
+        Args:
+            model_id: ID of the model to use
+        """
+        self.model_manager.set_current_model(model_id)
+    
+    def get_available_models(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get information about all available models.
+        
+        Returns:
+            Dictionary of model IDs to model information
+        """
+        return self.model_manager.get_available_models()
+    
+    def generate_response(self, user_message: str, model_id: str = None) -> str:
         """
         Generate a response to a user message.
         
         Args:
             user_message: The user's message
+            model_id: ID of the model to use (optional)
             
         Returns:
             The model's response
         """
-        try:
-            # Create messages list with system prompt and user message
-            messages = [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": user_message}
-            ]
-            
-            # Apply chat template and tokenize
-            inputs = self.tokenizer.apply_chat_template(
-                messages,
-                return_tensors="pt"
-            ).to(self.device)
-            
-            # Generate response
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    inputs,
-                    generation_config=self.generation_config
-                )
-            
-            # Decode response
-            response = self.tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
-            
-            return response.strip()
-        except Exception as e:
-            logger.error(f"Error generating response: {e}")
-            return f"I'm sorry, I encountered an error: {str(e)}"
+        return self.model_manager.generate_response(user_message, model_id)
     
-    def chat(self, messages: List[Dict[str, str]]) -> str:
+    def chat(self, messages: List[Dict[str, str]], streaming: bool = False, model_id: str = None) -> Union[str, Generator[str, None, None]]:
         """
         Generate a response based on a conversation history.
         
         Args:
             messages: List of message dictionaries with 'role' and 'content' keys
+            streaming: Whether to stream the response token by token
+            model_id: ID of the model to use (optional)
             
         Returns:
-            The model's response
+            The model's response as a string, or a generator yielding tokens if streaming=True
         """
-        try:
-            # Ensure system prompt is included
-            if not any(msg.get("role") == "system" for msg in messages):
-                messages = [{"role": "system", "content": self.system_prompt}] + messages
-            
-            # Apply chat template and tokenize
-            inputs = self.tokenizer.apply_chat_template(
-                messages,
-                return_tensors="pt"
-            ).to(self.device)
-            
-            # Generate response
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    inputs,
-                    generation_config=self.generation_config
-                )
-            
-            # Decode response
-            response = self.tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
-            
-            return response.strip()
-        except Exception as e:
-            logger.error(f"Error generating chat response: {e}")
-            return f"I'm sorry, I encountered an error: {str(e)}"
+        return self.model_manager.chat(messages, streaming, model_id)
